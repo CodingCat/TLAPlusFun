@@ -29,6 +29,7 @@
 (***************************************************************************)
 EXTENDS Integers
 
+\* declare the function Maximum
 Maximum(S) == 
   (*************************************************************************)
   (* If S is a set of numbers, then this define Maximum(S) to be the       *)
@@ -49,6 +50,7 @@ ASSUME
   /\ Ballot \subseteq Nat \* Nat is the set of natural numbers
   /\ 0 \in Ballot
   /\ Majority \subseteq SUBSET Acceptor
+  \* MS1 AND MS2 are both sets
   /\ \A MS1, MS2 \in Majority : MS1 \cap MS2 # {}
        (********************************************************************)
        (* All we assume about the set Majority of majorities is that any   *)
@@ -66,7 +68,7 @@ Messages ==
   (*************************************************************************)
   [type : {"phase1a"}, ins : RM, bal : Ballot \ {0}] 
       \cup
-  [type : {"phase1b"}, ins : RM, mbal : Ballot, bal : Ballot \cup {-1},
+  [type : {"phase1b"}, ins : RM, maxbal : Ballot, bal : Ballot \cup {-1},
    val : {"prepared", "aborted", "none"}, acc : Acceptor] 
       \cup
   [type : {"phase2a"}, ins : RM, bal : Ballot, val : {"prepared", "aborted"}]
@@ -85,11 +87,11 @@ VARIABLES
 PCTypeOK ==  
   (*************************************************************************)
   (* The type-correctness invariant.  Each acceptor maintains the values   *)
-  (* mbal, bal, and val for each instance of the Paxos consensus           *)
+  (* maxbal, bal, and val for each instance of the Paxos consensus           *)
   (* algorithm.                                                            *)
   (*************************************************************************)
   /\ rmState \in [RM -> {"working", "prepared", "committed", "aborted"}]
-  /\ aState  \in [RM -> [Acceptor -> [mbal : Ballot,
+  /\ aState  \in [RM -> [Acceptor -> [maxbal : Ballot,
                                       bal  : Ballot \cup {-1},
                                       val  : {"prepared", "aborted", "none"}]]]
   /\ msgs \subseteq Messages
@@ -98,7 +100,7 @@ PCInit ==  \* The initial predicate.
   /\ rmState = [r \in RM |-> "working"]
   /\ aState  = [r \in RM |-> 
                  [ac \in Acceptor 
-                    |-> [mbal |-> 0, bal  |-> -1, val  |-> "none"]]]
+                    |-> [maxbal |-> 0, bal  |-> -1, val  |-> "none"]]]
   /\ msgs = {}
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -188,13 +190,14 @@ Phase2a(bal, r) ==
   (* among potential leaders, and having a leader record in stable storage *)
   (* the largest ballot number for which it sent a phase 2a message.       *)
   (*************************************************************************)
+  \* this is to avoid using the same ballot number to continue in the same phase
   /\ ~\E m \in msgs : /\ m.type = "phase2a"
                       /\ m.bal = bal
                       /\ m.ins = r
   /\ \E MS \in Majority :    
         LET mset == {m \in msgs : /\ m.type = "phase1b"
                                   /\ m.ins  = r
-                                  /\ m.mbal = bal 
+                                  /\ m.maxbal = bal 
                                   /\ m.acc  \in MS}
             maxbal == Maximum({m.bal : m \in mset})
             val == IF maxbal = -1 
@@ -230,11 +233,11 @@ PCDecide ==
 Phase1b(acc) ==  
   \E m \in msgs : 
     /\ m.type = "phase1a"
-    /\ aState[m.ins][acc].mbal < m.bal
-    /\ aState' = [aState EXCEPT ![m.ins][acc].mbal = m.bal]
+    /\ aState[m.ins][acc].maxbal < m.bal
+    /\ aState' = [aState EXCEPT ![m.ins][acc].maxbal = m.bal]
     /\ Send([type |-> "phase1b", 
              ins  |-> m.ins, 
-             mbal |-> m.bal, 
+             maxbal |-> m.bal, 
              bal  |-> aState[m.ins][acc].bal, 
              val  |-> aState[m.ins][acc].val,
              acc  |-> acc])
@@ -243,8 +246,8 @@ Phase1b(acc) ==
 Phase2b(acc) == 
   /\ \E m \in msgs : 
        /\ m.type = "phase2a"
-       /\ aState[m.ins][acc].mbal \leq m.bal
-       /\ aState' = [aState EXCEPT ![m.ins][acc].mbal = m.bal,
+       /\ aState[m.ins][acc].maxbal \leq m.bal
+       /\ aState' = [aState EXCEPT ![m.ins][acc].maxbal = m.bal,
                                    ![m.ins][acc].bal  = m.bal,
                                    ![m.ins][acc].val  = m.val]
        /\ Send([type |-> "phase2b", ins |-> m.ins, bal |-> m.bal, 
