@@ -116,7 +116,7 @@ Send(m) == msgs' = msgs \cup {m}
 (***************************************************************************)
 RMPrepare(r) == 
   (*************************************************************************)
-  (* Resource manager r prepares by sending a phase 2a message for ballot  *)
+  (* Resource manager prepares by sending a phase 2a message for ballot  *)
   (* number 0 with value "prepared".                                       *)
   (*************************************************************************)
   /\ rmState[r] = "working"
